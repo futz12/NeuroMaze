@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>策略滚球：高阶挑战版</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #2c3e50; font-family: 'Segoe UI', Roboto, sans-serif; touch-action: none; user-select: none; }
+        #gameCanvas { display: block; }
+        
+        /* UI 层 */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 10;
+        }
+
+        /* 顶部栏 */
+        .top-bar {
+            padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0));
+            color: white; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px black;
+        }
+        .status-group { display: flex; gap: 15px; }
+        .coin-display { color: #f1c40f; display: flex; align-items: center; gap: 5px; }
+        .coin-icon { width: 16px; height: 16px; background: #f1c40f; border-radius: 50%; border: 2px solid #fff; display: inline-block; }
+        .key-icon { opacity: 0.3; filter: grayscale(1); transition: all 0.3s; font-size: 18px;}
+        .key-icon.active { opacity: 1; filter: grayscale(0); transform: scale(1.2); text-shadow: 0 0 10px gold; }
+        .effect-icon { font-size: 16px; margin-left: 10px; color: #e74c3c; display: none; text-shadow: 0 0 5px white;}
+
+        /* 底部道具栏 */
+        .bottom-bar {
+            padding: 10px; display: flex; justify-content: center; gap: 8px;
+            pointer-events: auto; margin-bottom: 5px;
+        }
+
+        .item-btn {
+            background: rgba(255,255,255,0.1); backdrop-filter: blur(2px);
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+            padding: 0; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s; width: 45px; height: 45px;
+        }
+        .item-btn:active { transform: scale(0.90); background: rgba(255,255,255,0.3); }
+        .item-btn.disabled { opacity: 0.3; filter: grayscale(1); pointer-events: none; }
+        .item-icon { font-size: 20px; }
+
+        /* Toast */
+        #toast {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.85); color: white; padding: 10px 25px; border-radius: 30px;
+            font-size: 18px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            text-align: center; white-space: nowrap; z-index: 20; border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* 旋转提示 */
+        #rotate-notice {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #2c3e50; z-index: 100;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            color: white; text-align: center;
+        }
+        .rotate-icon { font-size: 50px; animation: rotatePhone 2s infinite; margin-bottom: 20px;}
+        @keyframes rotatePhone { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 100% { transform: rotate(90deg); } }
+        @media screen and (orientation: portrait) { #rotate-notice { display: flex; } }
+
+        /* 开始/结算界面 */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(14, 23, 44, 0.96); z-index: 30;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;
+            text-align: center;
+        }
+        .title { font-size: 36px; margin: 0 0 10px 0; color: #3498db; text-shadow: 0 0 15px #2980b9;}
+        .info-box {
+            text-align:left; font-size: 12px; line-height: 1.6; 
+            background:rgba(255,255,255,0.08); padding: 15px 25px; border-radius: 12px;
+            max-width: 450px; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.1);
+        }
+        .feature-tag { display: inline-block; background: rgba(52, 152, 219, 0.3); padding: 2px 6px; border-radius: 4px; color: #85c1e9; margin-right: 5px; font-weight: bold;}
+        .btn-main {
+            padding: 12px 50px; font-size: 18px; font-weight: bold;
+            background: #27ae60; color: white; border: none; border-radius: 50px;
+            box-shadow: 0 5px 0 #1e8449; pointer-events: auto; cursor: pointer;
+        }
+        .btn-main:active { transform: translateY(5px); box-shadow: none; }
+
+        #countdown-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; justify-content: center; align-items: center;
+            font-size: 90px; color: rgba(255,255,255,0.9); font-weight: 900;
+            text-shadow: 0 0 20px rgba(52, 152, 219, 0.8); z-index: 15; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="rotate-notice">
+        <div class="rotate-icon">📱</div>
+        <h2>请横屏游玩</h2>
+        <p>获得最佳视野与操控体验</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div class="status-group">
+                <div>Level <span id="levelNum">1</span></div>
+                <div id="keyIndicator" class="key-icon">🔑</div>
+                <div id="reverseEffect" class="effect-icon">💫 反向操作!</div>
+            </div>
+            <div class="coin-display"><div class="coin-icon"></div> <span id="coinNum">0</span></div>
+        </div>
+        
+        <div class="bottom-bar">
+            <div class="item-btn" id="btnShield" onclick="buyItem('shield')"><div class="item-icon">🛡️</div></div>
+            <div class="item-btn" id="btnFreeze" onclick="buyItem('freeze')"><div class="item-icon">❄️</div></div>
+            <div class="item-btn" id="btnMini" onclick="buyItem('mini')"><div class="item-icon">🔍</div></div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="countdown-overlay">3</div>
+
+    <div id="start-screen">
+        <h1 class="title">策略滚球 EX</h1>
+        <div class="info-box">
+            <b>🎮 玩法升级：</b><br>
+            <span class="feature-tag">🌀 虫洞</span> 跳跃穿梭，连接断开的路径。<br>
+            <span class="feature-tag">🧊 地形</span> 冰面打滑，泥地减速，感受阻力变化。<br>
+            <span class="feature-tag">🎁 盲盒</span> 撞击问号箱，是福是祸？<br>
+            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.2); margin: 8px 0;">
+            ⚠️ 每3关开启迷雾模式 | 必须横屏游玩
+        </div>
+        <button class="btn-main" id="startBtn">开始挑战</button>
+    </div>
+
+<script>
+    // --- 核心 ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let gameState = 'START';
+    let level = 1;
+    let coins = 0;
+    let width, height;
+    let wakeLock = null;
+
+    // --- 物理参数 ---
+    let friction = 0.96; // 默认摩擦力
+    let currentSpeedMult = 0.6; // 默认速度
+    const baseRadius = 14;
+
+    // --- 实体 ---
+    const ball = { x: 0, y: 0, vx: 0, vy: 0, radius: baseRadius, color: '#3498db', active: true };
+    let holes = [], mapCoins = [], walls = [], keysList = [], doors = [], enemies = [];
+    
+    // 新增实体
+    let teleporters = []; // {x, y, id, linkId, color}
+    let terrains = [];    // {x, y, w, h, type: 'ice'|'mud'}
+    let mysteryBoxes = [];// {x, y, active}
+
+    // --- 状态 ---
+    let hasKey = false;
+    let isFoggy = false;
+    let isReversed = false; // 反向操作状态
+    let teleportCooldown = 0; // 传送冷却
+    let reverseTimer = 0;
+    
+    const powerups = { shield: false, miniTimer: 0 };
+    const PRICES = { shield: 5, freeze: 3, mini: 4 };
+
+    // --- 初始化 ---
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- 全屏管理 ---
+    async function enableImmersiveMode() {
+        try { if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen(); } catch(e){}
+        try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch(e){}
+    }
+
+    // --- 商店逻辑 ---
+    function updateShopUI() {
+        document.getElementById('coinNum').innerText = coins;
+        const checkBtn = (id, price, condition) => {
+            const btn = document.getElementById(id);
+            if (condition || coins < price) btn.classList.add('disabled'); else btn.classList.remove('disabled');
+        }
+        checkBtn('btnShield', PRICES.shield, powerups.shield);
+        checkBtn('btnFreeze', PRICES.freeze, false);
+        checkBtn('btnMini', PRICES.mini, powerups.miniTimer > 0);
+        
+        const keyInd = document.getElementById('keyIndicator');
+        if(hasKey) keyInd.classList.add('active'); else keyInd.classList.remove('active');
+
+        // 反向操作UI
+        document.getElementById('reverseEffect').style.display = isReversed ? 'block' : 'none';
+    }
+
+    window.buyItem = function(type) {
+        if (gameState !== 'PLAYING' && gameState !== 'COUNTDOWN') return;
+        if (coins >= PRICES[type]) {
+            if (type === 'shield' && !powerups.shield) {
+                coins -= PRICES.shield; powerups.shield = true; showToast("🛡️ 护盾装备");
+            } else if (type === 'freeze') {
+                coins -= PRICES.freeze; ball.vx = 0; ball.vy = 0; showToast("❄️ 绝对零度");
+            } else if (type === 'mini' && powerups.miniTimer <= 0) {
+                coins -= PRICES.mini; powerups.miniTimer = 300; showToast("🔍 缩小化");
+            }
+            updateShopUI();
+        } else showToast("金币不足");
+    }
+
+    // --- 关卡生成 (核心趣味点) ---
+    function generateLevel(lvl) {
+        ball.x = width / 2; ball.y = height / 2; ball.vx = 0; ball.vy = 0; ball.active = true;
+        hasKey = false;
+        
+        // 重置临时状态
+        isReversed = false; reverseTimer = 0; teleportCooldown = 0;
+        isFoggy = (lvl % 3 === 0);
+        if(isFoggy) showToast("⚠️ 迷雾模式", 2000);
+
+        // 清空数组
+        holes = []; mapCoins = []; walls = []; keysList = []; doors = []; enemies = [];
+        teleporters = []; terrains = []; mysteryBoxes = [];
+
+        // 1. 生成地形 (冰/泥) - 增加物理多样性
+        // Lvl 2+ 出现
+        if (lvl >= 2) {
+            let terrainCount = Math.min(Math.floor(lvl/2), 3);
+            for(let i=0; i<terrainCount; i++) {
+                let type = Math.random() > 0.5 ? 'ice' : 'mud';
+                let w = 150 + Math.random()*100;
+                let h = 150 + Math.random()*100;
+                let t = createSafeEntity('rect', 100, w, h); // 使用通用生成器
+                if(t) terrains.push({x: t.x, y: t.y, w, h, type});
+            }
+        }
+
+        // 2. 生成虫洞 (传送门) - 增加空间思维
+        // Lvl 3+ 出现
+        if (lvl >= 3) {
+            // 生成一对
+            let p1 = createSafeEntity('circle', 150);
+            let p2 = createSafeEntity('circle', 250); // 离出生点远一点
+            if(p1 && p2) {
+                teleporters.push({x: p1.x, y: p1.y, id: 1, linkId: 2, color: '#9b59b6'});
+                teleporters.push({x: p2.x, y: p2.y, id: 2, linkId: 1, color: '#8e44ad'});
+            }
+        }
+
+        // 3. 生成问号箱 (盲盒) - 增加风险评估
+        if (lvl >= 1) {
+            let boxCount = 2;
+            for(let i=0; i<boxCount; i++) {
+                let b = createSafeEntity('circle', 100);
+                if(b) mysteryBoxes.push({...b, active: true});
+            }
+        }
+
+        // 4. 标准墙壁 (根据关卡增加)
+        let wallCount = 5 + Math.floor(lvl / 1.5);
+        for(let i=0; i<wallCount; i++) createSafeWall();
+
+        // 5. 钥匙与门
+        if (lvl >= 2) {
+            let k = createSafeEntity('circle', 200);
+            if(k) keysList.push({...k, active:true});
+            
+            // 门
+            let dW = 30, dH = 120;
+            let dPos = createSafeEntity('rect', 150, dW, dH);
+            if(dPos) doors.push({x: dPos.x, y: dPos.y, w: dW, h: dH, open: false});
+        }
+
+        // 6. 敌人
+        if (lvl >= 3) {
+            let enemyCount = Math.min(Math.floor(lvl / 2), 5);
+            for(let i=0; i<enemyCount; i++) {
+                let e = createSafeEntity('circle', 200);
+                if(e) enemies.push({...e, vx: 1.5 + lvl*0.1, vy: 0, startX: e.x, range: 80+Math.random()*80});
+            }
+        }
+
+        // 7. 终点与陷阱
+        let greenHole = createSafeEntity('circle', 250);
+        if(greenHole) holes.push({...greenHole, type:'green'});
+        
+        let redCount = 3 + lvl;
+        for(let i=0; i<redCount; i++) {
+            let h = createSafeEntity('circle', 120);
+            if(h) holes.push({...h, type:'red'});
+        }
+
+        // 8. 金币
+        for(let i=0; i<5; i++) {
+            let c = createSafeEntity('circle', 80);
+            if(c) mapCoins.push({...c, active:true});
+        }
+
+        document.getElementById('levelNum').innerText = lvl;
+        updateShopUI();
+    }
+
+    // 通用安全位置生成器 (Circle or Rect)
+    function createSafeEntity(shape, minStartDist, w=0, h=0) {
+        let e = {x:0, y:0};
+        let safe = false, tries = 0; 
+        const padding = 60;
+        
+        while(!safe && tries < 200) {
+            e.x = padding + Math.random() * (width - padding*2 - w);
+            e.y = padding + Math.random() * (height - padding*2 - h);
+            
+            // 离中心(出生点)距离
+            if (Math.hypot(e.x + w/2 - width/2, e.y + h/2 - height/2) < minStartDist) { tries++; continue; }
+
+            // 避开已有物体
+            let collision = false;
+            // 简单化：检查所有墙壁和门
+            for(let o of [...walls, ...doors]) {
+                // AABB Check (Loose)
+                if (e.x < o.x + o.w + 30 && e.x + w + 30 > o.x &&
+                    e.y < o.y + o.h + 30 && e.y + h + 30 > o.y) collision = true;
+            }
+            if(collision) { tries++; continue; }
+
+            // 避开圆类物体 (近似)
+            let centerX = e.x + w/2; let centerY = e.y + h/2;
+            let checkList = [...holes, ...mapCoins, ...keysList, ...teleporters];
+            for(let c of checkList) {
+                if(Math.hypot(centerX - c.x, centerY - c.y) < 60) collision = true;
+            }
+            
+            if(!collision) safe = true;
+            tries++;
+        }
+        return safe ? e : null;
+    }
+
+    function createSafeWall() {
+        let isH = Math.random() > 0.5;
+        let w = isH ? 120 + Math.random()*80 : 25;
+        let h = isH ? 25 : 120 + Math.random()*80;
+        let t = createSafeEntity('rect', 120, w, h);
+        if(t) walls.push({x: t.x, y: t.y, w, h});
+    }
+
+    // --- 游戏循环 ---
+    function update() {
+        if (gameState === 'PLAYING') {
+            // 1. 计时器逻辑
+            if (powerups.miniTimer > 0) {
+                ball.radius = baseRadius * 0.6; powerups.miniTimer--;
+                if(powerups.miniTimer <= 0) { ball.radius = baseRadius; updateShopUI(); }
+            }
+            if (teleportCooldown > 0) teleportCooldown--;
+            if (reverseTimer > 0) {
+                reverseTimer--;
+                if(reverseTimer <= 0) { isReversed = false; showToast("💫 操作恢复正常"); updateShopUI(); }
+            }
+
+            // 2. 地形影响 (物理参数动态调整)
+            let onSpecialTerrain = false;
+            // 默认值
+            let targetFriction = 0.96; 
+            let targetSpeed = 0.6;
+
+            for(let t of terrains) {
+                // 检查球心是否在地块内
+                if (ball.x > t.x && ball.x < t.x + t.w && ball.y > t.y && ball.y < t.y + t.h) {
+                    onSpecialTerrain = true;
+                    if (t.type === 'ice') {
+                        targetFriction = 0.995; // 冰面：摩擦极低 (刹不住)
+                        targetSpeed = 0.8;      // 加速度略快
+                    } else if (t.type === 'mud') {
+                        targetFriction = 0.85;  // 泥地：摩擦极大 (走不动)
+                        targetSpeed = 0.3;
+                    }
+                }
+            }
+            friction = targetFriction;
+            currentSpeedMult = targetSpeed;
+
+
+            // 3. 敌人AI
+            for(let e of enemies) {
+                e.x += e.vx;
+                if (Math.abs(e.x - e.startX) > e.range) e.vx *= -1;
+                if (Math.hypot(ball.x - e.x, ball.y - e.y) < ball.radius + 15) {
+                    if(powerups.shield) { powerups.shield=false; ball.vx=(ball.x-e.x)*2; showToast("🛡️ 护盾抵消"); updateShopUI(); }
+                    else gameOver();
+                }
+            }
+
+            // 4. 物理运动
+            ball.vx *= friction; ball.vy *= friction;
+            ball.x += ball.vx; ball.y += ball.vy;
+
+            // 5. 碰撞检测
+            // 墙 & 门
+            if (hasKey) for(let d of doors) d.open = true;
+            let obstacles = [...walls];
+            for(let d of doors) if(!d.open) obstacles.push(d);
+
+            for (let w of obstacles) {
+                let testX = Math.max(w.x, Math.min(ball.x, w.x+w.w));
+                let testY = Math.max(w.y, Math.min(ball.y, w.y+w.h));
+                let dist = Math.hypot(ball.x - testX, ball.y - testY);
+                if (dist < ball.radius) {
+                    let overlap = ball.radius - dist;
+                    let nx = (ball.x - testX) / dist; let ny = (ball.y - testY) / dist;
+                    if (dist === 0) { nx = 0; ny = -1; }
+                    ball.x += nx * overlap; ball.y += ny * overlap;
+                    if (Math.abs(nx) > Math.abs(ny)) ball.vx *= -0.7; else ball.vy *= -0.7;
+                }
+            }
+
+            // 边界
+            if(ball.x<ball.radius) { ball.x=ball.radius; ball.vx*=-0.5; }
+            if(ball.x>width-ball.radius) { ball.x=width-ball.radius; ball.vx*=-0.5; }
+            if(ball.y<ball.radius) { ball.y=ball.radius; ball.vy*=-0.5; }
+            if(ball.y>height-ball.radius) { ball.y=height-ball.radius; ball.vy*=-0.5; }
+
+            // 6. 交互
+            // 金币
+            for(let c of mapCoins) if(c.active && Math.hypot(ball.x-c.x, ball.y-c.y)<ball.radius+15) { c.active=false; coins++; updateShopUI(); }
+            // 钥匙
+            for(let k of keysList) if(k.active && Math.hypot(ball.x-k.x, ball.y-k.y)<ball.radius+15) { k.active=false; hasKey=true; showToast("🔑 门锁开启"); updateShopUI(); }
+            
+            // 虫洞传送
+            if(teleportCooldown <= 0) {
+                for(let t of teleporters) {
+                    if (Math.hypot(ball.x - t.x, ball.y - t.y) < 20) {
+                        // 触发传送
+                        let dest = teleporters.find(pt => pt.id === t.linkId);
+                        if(dest) {
+                            ball.x = dest.x; ball.y = dest.y;
+                            teleportCooldown = 60; // 1秒冷却
+                            // 特效：给个速度冲量
+                            ball.vx = (Math.random()-0.5)*5; ball.vy = (Math.random()-0.5)*5;
+                            showToast("🌀 空间跳跃!");
+                        }
+                    }
+                }
+            }
+
+            // 问号箱 (Blind Box)
+            for(let b of mysteryBoxes) {
+                if(b.active && Math.hypot(ball.x - b.x, ball.y - b.y) < ball.radius + 15) {
+                    b.active = false;
+                    triggerMysteryEffect();
+                }
+            }
+
+            // 洞 (终点/陷阱)
+            for(let h of holes) if(Math.hypot(ball.x-h.x, ball.y-h.y)<18) {
+                if(h.type==='green') levelComplete();
+                else {
+                    if(powerups.shield) { powerups.shield=false; ball.vx=(ball.x-h.x); ball.vy=(ball.y-h.y); showToast("🛡️ 护盾破碎"); updateShopUI(); }
+                    else gameOver();
+                }
+            }
+        }
+        draw();
+        requestAnimationFrame(update);
+    }
+
+    function triggerMysteryEffect() {
+        let rand = Math.random();
+        if (rand < 0.3) {
+            coins += 5; showToast("🎁 幸运! 金币+5");
+        } else if (rand < 0.5) {
+            powerups.shield = true; showToast("🎁 获得护盾!");
+        } else if (rand < 0.75) {
+            // 厄运：反向操作
+            isReversed = true; 
+            reverseTimer = 300; // 5秒
+            showToast("😈 厄运! 操作反向");
+        } else {
+            // 厄运：扣钱
+            coins = Math.max(0, coins - 3); showToast("💸 厄运! 金币丢失");
+        }
+        updateShopUI();
+    }
+
+    // --- 渲染 ---
+    function draw() {
+        ctx.fillStyle = '#f3e5ab'; ctx.fillRect(0,0,width,height);
+        
+        // 1. 绘制特殊地形
+        for(let t of terrains) {
+            if(t.type === 'ice') {
+                ctx.fillStyle = 'rgba(135, 206, 250, 0.4)'; // 浅蓝
+                ctx.fillRect(t.x, t.y, t.w, t.h);
+                ctx.strokeStyle = 'rgba(135, 206, 250, 0.8)'; ctx.lineWidth = 2; ctx.strokeRect(t.x, t.y, t.w, t.h);
+                ctx.fillStyle = '#3498db'; ctx.font = '20px Arial'; ctx.fillText("❄️", t.x+10, t.y+25);
+            } else {
+                ctx.fillStyle = 'rgba(121, 85, 72, 0.4)'; // 泥色
+                ctx.fillRect(t.x, t.y, t.w, t.h);
+                ctx.strokeStyle = 'rgba(121, 85, 72, 0.8)'; ctx.lineWidth = 2; ctx.strokeRect(t.x, t.y, t.w, t.h);
+                ctx.fillStyle = '#5d4037'; ctx.font = '20px Arial'; ctx.fillText("💩", t.x+10, t.y+25);
+            }
+        }
+
+        // 2. 虫洞
+        for(let t of teleporters) {
+            ctx.beginPath(); ctx.arc(t.x, t.y, 20, 0, Math.PI*2);
+            ctx.fillStyle = t.color; ctx.fill();
+            // 旋转特效
+            let time = Date.now() / 200;
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(t.x, t.y, 15, time, time + Math.PI); ctx.stroke();
+        }
+
+        // 3. 墙壁 & 门
+        ctx.fillStyle = '#795548';
+        for(let w of walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+        for(let d of doors) {
+            if(d.open) {
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+                ctx.strokeRect(d.x, d.y, d.w, d.h); ctx.setLineDash([]);
+            } else {
+                ctx.fillStyle = '#c0392b'; ctx.fillRect(d.x, d.y, d.w, d.h);
+                ctx.fillStyle = 'white'; ctx.font = '14px Arial'; ctx.fillText("🔒", d.x+d.w/2-7, d.y+d.h/2+5);
+            }
+        }
+
+        // 4. 洞 & 问号箱
+        for(let h of holes) {
+            ctx.beginPath(); ctx.arc(h.x, h.y, 20, 0, Math.PI*2);
+            ctx.fillStyle = h.type==='green' ? '#2ecc71' : '#e74c3c'; ctx.fill();
+            let g = ctx.createRadialGradient(h.x, h.y, 10, h.x, h.y, 20);
+            g.addColorStop(0, 'transparent'); g.addColorStop(1, 'rgba(0,0,0,0.5)'); ctx.fillStyle = g; ctx.fill();
+        }
+        for(let b of mysteryBoxes) {
+            if(!b.active) continue;
+            ctx.fillStyle = '#f39c12'; ctx.fillRect(b.x-15, b.y-15, 30, 30);
+            ctx.fillStyle = '#fff'; ctx.font='20px bold Arial'; ctx.fillText("?", b.x-5, b.y+7);
+            ctx.strokeStyle = '#e67e22'; ctx.lineWidth=2; ctx.strokeRect(b.x-15, b.y-15, 30, 30);
+        }
+
+        // 5. 物品 & 敌人
+        for(let c of mapCoins) {
+            if(!c.active) continue;
+            ctx.beginPath(); ctx.arc(c.x, c.y, 10, 0, Math.PI*2);
+            ctx.fillStyle = '#f1c40f'; ctx.fill(); ctx.strokeStyle = '#d35400'; ctx.stroke();
+        }
+        for(let k of keysList) if(k.active) { ctx.font = "24px Arial"; ctx.fillText("🔑", k.x-12, k.y+8); }
+        for(let e of enemies) {
+            ctx.beginPath(); ctx.arc(e.x, e.y, 16, 0, Math.PI*2); ctx.fillStyle = '#8e44ad'; ctx.fill();
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(e.x-5, e.y-4, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(e.x+5, e.y-4, 4, 0, Math.PI*2); ctx.fill();
+        }
+
+        // 6. 玩家
+        if (ball.active) {
+            if (powerups.shield) {
+                ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius+6, 0, Math.PI*2);
+                ctx.strokeStyle = `rgba(52, 152, 219, ${0.4+Math.sin(Date.now()/150)*0.3})`; ctx.lineWidth = 3; ctx.stroke();
+            }
+            // 反向状态下变红
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+            let color = isReversed ? '#e74c3c' : ball.color;
+            let bg = ctx.createRadialGradient(ball.x-5, ball.y-5, 2, ball.x, ball.y, ball.radius);
+            bg.addColorStop(0, '#fff'); bg.addColorStop(1, color); ctx.fillStyle = bg; ctx.fill();
+        }
+
+        // 7. 迷雾
+        if (isFoggy && ball.active) {
+            let grad = ctx.createRadialGradient(ball.x, ball.y, 25, ball.x, ball.y, 100);
+            grad.addColorStop(0, 'rgba(20,20,30,0)'); grad.addColorStop(0.3, 'rgba(20,20,30,0.8)'); grad.addColorStop(1, 'rgba(20,20,30,1)');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.font = '14px Arial'; ctx.fillText("迷雾模式", width/2 - 30, height - 30);
+        }
+    }
+
+    // --- 陀螺仪控制 (含横屏修正与反向逻辑) ---
+    function handleOrientation(e) {
+        if (gameState !== 'PLAYING') return;
+
+        const angle = (window.screen.orientation && window.screen.orientation.angle) || window.orientation || 0;
+        let xInput = 0, yInput = 0;
+        const b = e.beta, g = e.gamma; 
+
+        // 横屏修正逻辑 (基于之前的讨论)
+        if (angle === 90) {
+            xInput = b;
+            yInput = -g; // 修正后的Y轴
+        } else if (angle === -90 || angle === 270) {
+            xInput = -b;
+            yInput = g;
+        } else {
+            xInput = g; yInput = b;
+        }
+
+        // 厄运反向逻辑
+        if (isReversed) {
+            xInput = -xInput;
+            yInput = -yInput;
+        }
+
+        const maxTilt = 40;
+        xInput = Math.max(-maxTilt, Math.min(maxTilt, xInput));
+        yInput = Math.max(-maxTilt, Math.min(maxTilt, yInput));
+
+        ball.vx += xInput * 0.05 * currentSpeedMult;
+        ball.vy += yInput * 0.05 * currentSpeedMult;
+    }
+
+    // --- 流程 ---
+    function levelComplete() {
+        gameState = 'WIN_ANIM'; ball.vx = 0; ball.vy = 0;
+        showToast(`🎉 Level ${level} Clear!`);
+        setTimeout(() => { level++; generateLevel(level); startCountDown(); }, 2000);
+    }
+    function gameOver() {
+        gameState = 'GAMEOVER'; ball.active = false; showToast("☠️ 失败");
+        setTimeout(() => { document.getElementById('start-screen').style.display='flex'; document.getElementById('startBtn').innerText="重试"; }, 1500);
+    }
+    function startCountDown() {
+        gameState = 'COUNTDOWN';
+        const ol = document.getElementById('countdown-overlay'); ol.style.display='flex';
+        let c = 3; ol.innerText = c;
+        let t = setInterval(() => { c--; if(c>0) ol.innerText=c; else { clearInterval(t); ol.style.display='none'; gameState='PLAYING'; showToast("GO!", 500); } }, 800);
+    }
+    function showToast(text, duration=2000) { const t=document.getElementById('toast'); t.innerText=text; t.style.opacity=1; setTimeout(()=>t.style.opacity=0, duration); }
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+        await enableImmersiveMode();
+        if (typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function') {
+            DeviceOrientationEvent.requestPermission().then(s=>{ if(s==='granted'){ window.addEventListener('deviceorientation', handleOrientation); document.getElementById('start-screen').style.display='none'; generateLevel(level); startCountDown(); } else alert('需授权陀螺仪'); });
+        } else {
+            window.addEventListener('deviceorientation', handleOrientation);
+            document.getElementById('start-screen').style.display='none'; generateLevel(level); startCountDown();
+        }
+    });
+
+    requestAnimationFrame(update);
+</script>
+</body>
+</html>
