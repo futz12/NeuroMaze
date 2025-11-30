@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NeuroMaze - 玩法向导</title>
+    <style>
+        :root {
+            --primary: #3498db;
+            --bg-dark: #1a253a;
+            --glass: rgba(255, 255, 255, 0.1);
+            --text: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* 轮播容器 */
+        .slider-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slides-wrapper {
+            display: flex;
+            transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+            height: 100%;
+            width: 100%;
+        }
+
+        .slide {
+            min-width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* 内容卡片 */
+        .content-card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 30px 20px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 演示画布区 */
+        .demo-canvas-container {
+            width: 280px;
+            height: 180px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        h2 { margin: 0 0 10px 0; font-size: 24px; color: #3498db; }
+        p { margin: 0 0 15px 0; font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.8); }
+
+        .science-badge {
+            display: inline-block;
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        /* 底部导航控件 */
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .dots { display: flex; gap: 8px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: all 0.3s; }
+        .dot.active { background: var(--primary); width: 20px; border-radius: 4px; }
+
+        .btn { background: none; border: none; color: white; font-size: 16px; cursor: pointer; padding: 10px 20px; opacity: 0.7; }
+        .btn-primary { background: var(--primary); border-radius: 20px; opacity: 1; font-weight: bold; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4); }
+
+    </style>
+</head>
+<body>
+
+<div class="slider-container">
+    <div class="slides-wrapper" id="wrapper">
+        
+        <div class="slide">
+            <div class="content-card">
+                <div class="demo-canvas-container"><canvas id="canvas1" width="280" height="180"></canvas></div>
+                <div class="science-badge">🧠 训练：感觉统合 & 精细运动</div>
+                <h2>体感控制</h2>
+                <p>双手横持设备。向左倾斜，球向左滚；向前倾斜，球向下滚。<br>你需要极高的手眼协调能力来控制平衡。</p>
+            </div>
+        </div>
+
+        <div class="slide">
+            <div class="content-card">
+                <div class="demo-canvas-container"><canvas id="canvas2" width="280" height="180"></canvas></div>
+                <div class="science-badge">🧠 训练：逻辑规划 & 抑制控制</div>
+                <h2>钥匙与门锁</h2>
+                <p>这不是单纯的跑酷。红门挡路时，必须先规划路线去拾取 <span style="color:gold">🔑钥匙</span>。<br>不要急着冲向终点，观察全局。</p>
+            </div>
+        </div>
+
+        <div class="slide">
+            <div class="content-card">
+                <div class="demo-canvas-container"><canvas id="canvas_shop" width="280" height="180"></canvas></div>
+                <div class="science-badge">🧠 训练：资源管理 & 决策制定</div>
+                <h2>金币与策略商店</h2>
+                <p>金币不只是分数！收集金币可在底部商店购买<b>道具</b>。<br>
+                🛡️ <b>护盾</b>：抵挡一次死亡 (5币)<br>
+                ❄️ <b>急冻</b>：瞬间刹车 (3币)</p>
+            </div>
+        </div>
+
+        <div class="slide">
+            <div class="content-card">
+                <div class="demo-canvas-container"><canvas id="canvas3" width="280" height="180"></canvas></div>
+                <div class="science-badge">🧠 训练：适应性思维 & 反应力</div>
+                <h2>复杂地形</h2>
+                <p><b>🧊 冰面</b>：极度顺滑，难以刹车。<br><b>💩 泥沼</b>：寸步难行，移动缓慢。<br>根据地面反馈实时调整倾斜力度。</p>
+            </div>
+        </div>
+
+        <div class="slide">
+            <div class="content-card">
+                <div class="demo-canvas-container"><canvas id="canvas4" width="280" height="180"></canvas></div>
+                <div class="science-badge">🧠 训练：空间折叠 & 工作记忆</div>
+                <h2>虫洞与迷雾</h2>
+                <p>进入 <span style="color:#9b59b6">🌀 传送门</span> 瞬间跨越地图。<br>注意：每3关会降临<b>迷雾</b>，遮挡视野，请务必记住地图全貌！</p>
+            </div>
+        </div>
+
+        <div class="slide">
+            <div class="content-card">
+                <div class="demo-canvas-container"><canvas id="canvas5" width="280" height="180"></canvas></div>
+                <div class="science-badge">🧠 训练：风险评估 & 情绪调节</div>
+                <h2>机遇与风险</h2>
+                <p>撞击 <b>🎁 问号箱</b> 可能会获得金币或护盾，也可能导致<b>操作反向</b>！<br>你准备好挑战大脑极限了吗？</p>
+                <button class="btn btn-primary" onclick="enterGame()" style="margin-top:10px; width:100%;">开始游戏</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="controls">
+        <button class="btn" id="btnSkip" onclick="enterGame()">跳过</button>
+        <div class="dots" id="dotsContainer"></div>
+        <button class="btn" id="btnNext" onclick="nextSlide()">下一步</button>
+    </div>
+</div>
+
+<script>
+    // --- 轮播逻辑 ---
+    let currentSlide = 0;
+    const totalSlides = 6; // 更新为6页
+    const wrapper = document.getElementById('wrapper');
+    const dotsContainer = document.getElementById('dotsContainer');
+
+    for(let i=0; i<totalSlides; i++) {
+        let dot = document.createElement('div');
+        dot.className = `dot ${i===0?'active':''}`;
+        dotsContainer.appendChild(dot);
+    }
+
+    function updateSlide() {
+        wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
+        Array.from(dotsContainer.children).forEach((d, i) => d.className = `dot ${i===currentSlide?'active':''}`);
+        const btnNext = document.getElementById('btnNext');
+        const btnSkip = document.getElementById('btnSkip');
+        if (currentSlide === totalSlides - 1) {
+            btnNext.style.display = 'none';
+            btnSkip.style.display = 'none';
+        } else {
+            btnNext.style.display = 'block';
+            btnSkip.style.display = 'block';
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) { currentSlide++; updateSlide(); }
+    }
+
+    function enterGame() {
+        // !!! 这里修改为你的游戏文件名 !!!
+        window.location.href = 'game.html'; 
+    }
+
+    // 触摸滑动支持
+    let touchStartX = 0;
+    wrapper.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX);
+    wrapper.addEventListener('touchend', e => {
+        let touchEndX = e.changedTouches[0].clientX;
+        if (touchStartX - touchEndX > 50) nextSlide();
+        if (touchEndX - touchStartX > 50 && currentSlide > 0) { currentSlide--; updateSlide(); }
+    });
+
+    // --- 动画引擎 ---
+    function initDemo(id, renderFn) {
+        const canvas = document.getElementById(id);
+        const ctx = canvas.getContext('2d');
+        let frameCount = 0;
+        function loop() {
+            ctx.clearRect(0, 0, 280, 180);
+            renderFn(ctx, frameCount++);
+            requestAnimationFrame(loop);
+        }
+        loop();
+    }
+
+    // 绘图工具
+    const drawBall = (ctx, x, y, color='#3498db', shield=false) => {
+        if(shield) {
+            ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI*2); 
+            ctx.strokeStyle='rgba(52,152,219,0.6)'; ctx.lineWidth=2; ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI*2);
+        ctx.fillStyle = color; ctx.fill();
+        ctx.beginPath(); ctx.arc(x-3, y-3, 3, 0, Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.fill();
+    };
+    const drawIcon = (ctx, txt, x, y, size=20) => { ctx.font=`${size}px Arial`; ctx.fillStyle='white'; ctx.fillText(txt, x-size/2, y+size/3); };
+
+    // --- Slide 1: 控制 ---
+    initDemo('canvas1', (ctx, f) => {
+        let tilt = Math.sin(f * 0.05) * 0.3; 
+        ctx.save(); ctx.translate(140, 90); ctx.rotate(tilt);
+        ctx.strokeStyle = 'white'; ctx.lineWidth = 4;
+        ctx.strokeRect(-40, -70, 80, 140); ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(-40, -70, 80, 140);
+        drawBall(ctx, tilt * 80, 30);
+        if(tilt > 0.1) drawIcon(ctx, '⬅️', -60, 0); if(tilt < -0.1) drawIcon(ctx, '➡️', 60, 0);
+        ctx.restore();
+    });
+
+    // --- Slide 2: 钥匙 ---
+    initDemo('canvas2', (ctx, f) => {
+        let cycle = f % 300;
+        let ballX = 0, ballY = 90;
+        if (cycle < 100) { ballX = 40 + (cycle/100) * 200; } 
+        else if (cycle < 200) { ballX = 240 - ((cycle-100)/100) * 100; } 
+        else { ballX = 140; ballY = 90 - ((cycle-200)/100) * 80; }
+        if(cycle < 100) drawIcon(ctx, '🔑', 240, 90);
+        if(cycle < 100) { ctx.fillStyle = '#e74c3c'; ctx.fillRect(120, 40, 40, 10); drawIcon(ctx, '🔒', 140, 60); } 
+        else { ctx.strokeStyle = '#fff'; ctx.setLineDash([4,4]); ctx.strokeRect(120, 40, 40, 10); ctx.setLineDash([]); }
+        ctx.beginPath(); ctx.arc(140, 20, 15, 0, Math.PI*2); ctx.fillStyle='#2ecc71'; ctx.fill();
+        drawBall(ctx, ballX, ballY);
+    });
+
+    // --- Slide 3: 商店演示 (NEW!) ---
+    initDemo('canvas_shop', (ctx, f) => {
+        let cycle = f % 250;
+        
+        // 模拟UI栏
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 140, 280, 40);
+        
+        // 状态定义
+        let coins = 4;
+        let hasShield = false;
+        let ballX = 40;
+        
+        if (cycle > 60) { coins = 5; } // 捡到金币
+        if (cycle > 120) { coins = 0; hasShield = true; } // 买了护盾
+
+        // 1. 画球
+        if (cycle < 60) ballX = 40 + cycle; // 移动去吃币
+        else ballX = 100 + Math.sin(f*0.1)*10; // 停在中间晃动
+        
+        drawBall(ctx, ballX, 80, '#3498db', hasShield);
+
+        // 2. 画金币 (被吃掉前)
+        if (cycle < 60) {
+            drawIcon(ctx, '🟡', 100, 80);
+        } else if (cycle < 80) {
+            // 飘字 +1
+            ctx.font='14px Arial'; ctx.fillStyle='#f1c40f'; ctx.fillText("+1", 100, 80 - (cycle-60));
+        }
+
+        // 3. 画商店UI
+        // 金币数
+        drawIcon(ctx, '🟡', 30, 160, 14);
+        ctx.font='14px Arial'; ctx.fillStyle='white'; ctx.fillText(`x ${coins}`, 45, 165);
+
+        // 购买按钮 (Shield, Price: 5)
+        let canAfford = coins >= 5;
+        let btnColor = canAfford ? '#27ae60' : 'rgba(255,255,255,0.2)';
+        
+        // 购买动作模拟 (点击效果)
+        if (cycle > 115 && cycle < 125) btnColor = '#fff'; 
+
+        ctx.fillStyle = btnColor;
+        ctx.beginPath(); ctx.roundRect(180, 145, 60, 30, 5); ctx.fill();
+        drawIcon(ctx, '🛡️', 195, 160, 16);
+        ctx.font='10px Arial'; ctx.fillStyle='white'; ctx.fillText("5", 215, 163);
+
+        // 购买后的提示
+        if (cycle > 120 && cycle < 160) {
+            ctx.font='12px Arial'; ctx.fillStyle='#2ecc71'; ctx.fillText("Equipped!", 180, 135);
+        }
+    });
+
+    // --- Slide 4: 地形 ---
+    initDemo('canvas3', (ctx, f) => {
+        ctx.fillStyle = 'rgba(135, 206, 250, 0.5)'; ctx.fillRect(20, 40, 240, 40); 
+        drawIcon(ctx, '❄️', 260, 60);
+        ctx.fillStyle = 'rgba(121, 85, 72, 0.5)'; ctx.fillRect(20, 100, 240, 40);
+        drawIcon(ctx, '💩', 260, 120);
+        let xIce = (f * 4) % 320; 
+        let xMud = (f * 1.5) % 320; 
+        if (xIce < 280) drawBall(ctx, xIce, 60, '#3498db');
+        if (xMud < 280) drawBall(ctx, xMud, 120, '#e67e22');
+    });
+
+    // --- Slide 5: 虫洞 ---
+    initDemo('canvas4', (ctx, f) => {
+        let cycle = f % 200;
+        ctx.beginPath(); ctx.arc(60, 90, 20, 0, Math.PI*2); ctx.fillStyle='#9b59b6'; ctx.fill();
+        ctx.beginPath(); ctx.arc(220, 90, 20, 0, Math.PI*2); ctx.fillStyle='#8e44ad'; ctx.fill();
+        let bx, alpha = 1;
+        if (cycle < 60) bx = cycle; 
+        else if (cycle < 80) { bx = 60; alpha = 1 - (cycle-60)/20; } 
+        else if (cycle < 100) { bx = 220; alpha = (cycle-80)/20; } 
+        else bx = 220 + (cycle-100);
+        ctx.globalAlpha = alpha; drawBall(ctx, bx, 90); ctx.globalAlpha = 1;
+        if (f % 400 > 200) {
+            let g = ctx.createRadialGradient(140, 90, 30, 140, 90, 150);
+            g.addColorStop(0, 'transparent'); g.addColorStop(1, 'rgba(20,20,30,0.9)');
+            ctx.fillStyle = g; ctx.fillRect(0,0,280,180);
+            ctx.fillStyle = 'white'; ctx.font='12px Arial'; ctx.fillText("迷雾模式", 130, 160);
+        }
+    });
+
+    // --- Slide 6: 盲盒 ---
+    initDemo('canvas5', (ctx, f) => {
+        let cycle = f % 200;
+        let boxX = 140, hit = cycle > 80;
+        if (!hit) {
+            ctx.fillStyle = '#f39c12'; ctx.fillRect(boxX-15, 75, 30, 30); drawIcon(ctx, '?', boxX, 90);
+            drawBall(ctx, 40 + cycle, 90);
+        } else {
+            ctx.font = '30px Arial'; 
+            if ((f/200)%2 < 1) ctx.fillText("💰", 130, 80 - (cycle-80)); 
+            else ctx.fillText("😈", 130, 80 - (cycle-80));
+            drawBall(ctx, 120 - (cycle-80), 90, (f/200)%2 >= 1 ? '#e74c3c' : '#3498db');
+        }
+    });
+
+</script>
+</body>
+</html>
